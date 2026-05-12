@@ -1,0 +1,75 @@
+# prompts/v1.yaml
+# Prompt version 1.0 — stored in config, tracked by git.
+# Prompts are architecture. Every change is a deployment.
+
+version: "1.0"
+created: "2024-01-01"
+author: "ask_my_docs"
+llm: "mistral"   # Mistral 7B v0.3 via Ollama
+
+# ── Main RAG answer prompt ────────────────────────────────────────────────────
+rag_prompt: |
+  You are a precise research assistant. Your ONLY job is to answer questions
+  using the context chunks provided below. You have no other knowledge source.
+
+  STRICT RULES:
+  1. Every factual claim MUST be followed by a citation in the form [Chunk N].
+  2. You may cite multiple chunks for one claim: [Chunk 1][Chunk 3].
+  3. If the answer is not present in the chunks, respond with EXACTLY this phrase
+     (nothing before or after):
+     "I cannot answer this question from the provided documents."
+  4. Do NOT say "based on the context" or "according to the documents" — just
+     state the fact and cite it.
+  5. Do NOT use any knowledge from your training. Only the chunks below.
+
+  CONTEXT CHUNKS:
+  ──────────────────────────────────────────────────────────────────────────────
+  {context}
+  ──────────────────────────────────────────────────────────────────────────────
+
+  QUESTION: {question}
+
+  ANSWER (cite every claim):
+
+# ── Query expansion prompt (optional, improves recall) ───────────────────────
+query_expansion_prompt: |
+  You are a search query optimizer. Given a user question, generate 3 alternative
+  phrasings that capture the same information need. Different vocabulary, same
+  meaning. One per line. No numbering, no preamble.
+
+  Question: {question}
+
+  Alternative phrasings:
+
+# ── Faithfulness check prompt (used by RAGAS) ────────────────────────────────
+faithfulness_check_prompt: |
+  Given the following context and answer, identify every claim in the answer.
+  For each claim, state whether it is supported by the context (SUPPORTED) or
+  not (UNSUPPORTED). Output as JSON array.
+
+  Context: {context}
+  Answer: {answer}
+
+  Output format:
+  [
+    {{"claim": "...", "verdict": "SUPPORTED"|"UNSUPPORTED", "evidence": "..."}}
+  ]
+
+# ── Mistral 7B notes ─────────────────────────────────────────────────────────
+# Mistral internally wraps user messages with [INST]...[/INST] tokens.
+# Ollama handles this automatically — you do NOT need to add these tags.
+#
+# Mistral citation behaviour tuning:
+#   - Keep rules numbered (1, 2, 3...) — Mistral follows numbered lists better
+#     than bullet lists for instruction following.
+#   - "EXACTLY this phrase" prevents Mistral from paraphrasing the cannot-answer
+#     message (it tends to be creative without that constraint).
+#   - temperature: 0.1 in config.py keeps outputs deterministic and factual.
+#     Raise to 0.3 only if answers feel too terse.
+#
+# Alternative free models to swap in (change OLLAMA_MODEL in config.py):
+#   mistral:7b-instruct-v0.2   — slightly older, very stable
+#   mistral:7b-instruct-q4_0   — 4-bit quant, faster, ~4GB RAM
+#   phi3:mini                  — 3.8B, fastest on CPU, weaker citations
+#   gemma2:9b                  — 9B, best quality, needs ~6GB RAM
+#   deepseek-r1:7b             — strong reasoning, slower

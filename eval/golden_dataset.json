@@ -1,0 +1,22 @@
+[
+  {
+    "question": "What is the core idea of the attention mechanism in the Transformer?",
+    "ground_truth": "Attention allows the model to focus on different positions of the input sequence when computing a representation, using queries, keys, and values to compute weighted sums."
+  },
+  {
+    "question": "What optimizer is used to train the Transformer model?",
+    "ground_truth": "The Transformer is trained using the Adam optimizer with beta1=0.9, beta2=0.98, and epsilon=10^-9, with a custom learning rate schedule that includes warmup steps."
+  },
+  {
+    "question": "How many attention heads does the base Transformer use?",
+    "ground_truth": "The base Transformer model uses 8 parallel attention heads."
+  },
+  {
+    "question": "What dataset was used to train the Transformer on English-to-German translation?",
+    "ground_truth": "The model was trained on the WMT 2014 English-German dataset, which consists of approximately 4.5 million sentence pairs."
+  },
+  {
+    "question": "What is the purpose of positional encoding in the Transformer?",
+    "ground_truth": "Positional encoding adds information about the relative or absolute position of tokens in the sequence, since the Transformer contains no recurrence or convolution and cannot otherwise determine token order."
+  }
+]

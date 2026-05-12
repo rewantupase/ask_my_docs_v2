@@ -1,0 +1,140 @@
+# .github/workflows/rag_quality_gate.yml
+#
+# Automatically evaluates RAG quality on every pull request.
+# If faithfulness, answer_relevancy, or context_precision drop
+# below thresholds defined in config.py → the PR is blocked.
+#
+# This is exactly how production AI teams gate quality regressions.
+
+name: RAG Quality Gate
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "src/**"
+      - "prompts/**"
+      - "config.py"
+      - "eval/**"
+
+jobs:
+  evaluate:
+    name: RAGAS Evaluation
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout code ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Python setup ─────────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── Ollama setup ──────────────────────────────────────────────────────────
+      - name: Install Ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Start Ollama server
+        run: |
+          ollama serve &
+          sleep 5    # wait for server to start
+
+      - name: Pull Mistral 7B
+        run: ollama pull mistral
+
+      # ── Restore vector store from cache (avoids re-ingesting every PR) ───────
+      - name: Restore ChromaDB cache
+        uses: actions/cache@v4
+        id: chroma-cache
+        with:
+          path: chroma_db/
+          key: chroma-db-${{ hashFiles('docs/**') }}
+          restore-keys: chroma-db-
+
+      # ── Ingest documents if no cache hit ──────────────────────────────────────
+      - name: Ingest documents (if cache miss)
+        if: steps.chroma-cache.outputs.cache-hit != 'true'
+        run: python scripts/ingest.py --folder docs/
+
+      # ── Run RAGAS evaluation ──────────────────────────────────────────────────
+      - name: Run RAGAS evaluation
+        env:
+          # If using RAGAS with OpenAI for scoring (optional):
+          # OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PYTHONPATH: .
+        run: |
+          python scripts/evaluate.py \
+            --golden eval/golden_dataset.json \
+            --output eval/results_${{ github.sha }}.json
+
+      # ── Upload results as artifact ────────────────────────────────────────────
+      - name: Upload evaluation results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ragas-results-${{ github.sha }}
+          path: eval/results_*.json
+
+      # ── Comment results on PR ─────────────────────────────────────────────────
+      - name: Comment results on PR
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+            const glob = require('glob');
+
+            const files = glob.sync('eval/results_*.json');
+            if (!files.length) {
+              core.warning('No results file found');
+              return;
+            }
+
+            const results = JSON.parse(fs.readFileSync(files[0]));
+            const icon = results.gate_passed ? '✅' : '❌';
+            const status = results.gate_passed ? 'PASSED' : 'FAILED';
+
+            const body = `## ${icon} RAG Quality Gate: ${status}
+
+            | Metric | Score | Threshold | Status |
+            |--------|-------|-----------|--------|
+            | Faithfulness | ${results.faithfulness.toFixed(3)} | ${results.thresholds.faithfulness} | ${results.faithfulness >= results.thresholds.faithfulness ? '✅' : '❌'} |
+            | Answer Relevancy | ${results.answer_relevancy.toFixed(3)} | ${results.thresholds.answer_relevancy} | ${results.answer_relevancy >= results.thresholds.answer_relevancy ? '✅' : '❌'} |
+            | Context Precision | ${results.context_precision.toFixed(3)} | ${results.thresholds.context_precision} | ${results.context_precision >= results.thresholds.context_precision ? '✅' : '❌'} |
+
+            Evaluated on ${results.evaluated}/${results.total_questions} QA pairs.
+            `;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      # ── Fail the job if quality gate failed ───────────────────────────────────
+      - name: Enforce quality gate
+        run: |
+          python - <<'EOF'
+          import json, sys, glob
+          files = glob.glob("eval/results_*.json")
+          if not files:
+              print("No results file found — evaluation may have failed.")
+              sys.exit(1)
+          results = json.load(open(files[0]))
+          if not results["gate_passed"]:
+              print("Quality gate FAILED. See evaluation report above.")
+              print(f"  faithfulness:      {results['faithfulness']:.4f} (min {results['thresholds']['faithfulness']})")
+              print(f"  answer_relevancy:  {results['answer_relevancy']:.4f} (min {results['thresholds']['answer_relevancy']})")
+              print(f"  context_precision: {results['context_precision']:.4f} (min {results['thresholds']['context_precision']})")
+              sys.exit(1)
+          print("Quality gate PASSED.")
+          sys.exit(0)
+          EOF

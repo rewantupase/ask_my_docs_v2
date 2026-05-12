@@ -1,0 +1,44 @@
+# Ask My Docs — dependencies (all free, all open source)
+
+# ── Core RAG ──────────────────────────────────────────────────────────────────
+langchain==0.2.16
+langchain-community==0.2.16
+langchain-core==0.2.38
+
+# ── Document loading ──────────────────────────────────────────────────────────
+pymupdf==1.24.10              # PDF parsing (fast, layout-aware)
+unstructured==0.15.7          # Markdown + misc format loading
+beautifulsoup4==4.12.3        # web page parsing
+requests==2.32.3
+
+# ── Embeddings (free, local) ──────────────────────────────────────────────────
+sentence-transformers==3.1.1  # all-MiniLM-L6-v2 embedding model
+torch==2.4.1                  # CPU-only is fine for MiniLM
+# To install CPU-only torch (smaller download):
+# pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# ── Vector store ──────────────────────────────────────────────────────────────
+chromadb==0.5.15              # local SQLite-backed vector DB
+
+# ── Keyword search ────────────────────────────────────────────────────────────
+rank-bm25==0.2.2
+
+# ── Cross-encoder reranker (free, local) ──────────────────────────────────────
+# uses sentence-transformers CrossEncoder class (already installed above)
+# model: cross-encoder/ms-marco-MiniLM-L-6-v2 (auto-downloaded on first use)
+
+# ── LLM (Ollama local — free) ─────────────────────────────────────────────────
+ollama==0.3.3                 # Python client for local Ollama server
+
+# ── Prompt config ─────────────────────────────────────────────────────────────
+pyyaml==6.0.2
+
+# ── Evaluation ────────────────────────────────────────────────────────────────
+ragas==0.1.21
+datasets==2.21.0
+
+# ── Utilities ────────────────────────────────────────────────────────────────
+tqdm==4.66.5                  # progress bars
+rich==13.8.1                  # pretty terminal output
+python-dotenv==1.0.1
+numpy==1.26.4
